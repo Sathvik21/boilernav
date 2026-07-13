@@ -54,10 +54,12 @@ function validEdit(edit) {
 function mergeEdit(item) {
   const g = readJSON(WALK_FILE, { nodes:{}, edges:[] });
   const edit = item.edit || { nodes:{}, edges:[] }, map = {};
+  g.ninfo = g.ninfo || {};
   for (const oldId of Object.keys(edit.nodes || {})) {
     const nid = `s${item.id}_${oldId}`;
     map[oldId] = nid;
     g.nodes[nid] = edit.nodes[oldId];
+    if (edit.ninfo && edit.ninfo[oldId]) g.ninfo[nid] = edit.ninfo[oldId];  // carry type/floor
   }
   for (const e of (edit.edges || [])) {
     const a = map[e[0]] || e[0];          // remap new ids; base ids pass through
