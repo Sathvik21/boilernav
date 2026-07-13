@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BoilerNav</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; font-family:'Roboto',Arial,sans-serif; overflow:hidden; }
+  #map { position:absolute; inset:0; z-index:0; background:#e8eaed; }
+
+  .card { position:absolute; top:12px; left:12px; width:360px; max-width:calc(100vw - 24px);
+    background:#fff; border-radius:8px; z-index:1000;
+    box-shadow:0 1px 3px rgba(60,64,67,.30), 0 4px 8px rgba(60,64,67,.15); }
+  .card-head { display:flex; align-items:center; gap:10px; padding:12px 14px 4px; }
+  .brand { display:flex; align-items:center; gap:7px; font-weight:700; font-size:18px; color:#3c4043; letter-spacing:-.3px; }
+  .brand b { color:#CEB888; } .brand .loco { font-size:19px; }
+  .card-body { padding:8px 14px 14px; display:flex; flex-direction:column; gap:8px; }
+  .field { position:relative; }
+  .row { display:flex; align-items:center; gap:10px; background:#f1f3f4; border-radius:8px; padding:0 12px; height:44px;
+    border:1px solid transparent; transition:border-color .12s, background .12s; }
+  .row:focus-within { background:#fff; border-color:#1a73e8; }
+  .dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+  .dot.o { background:#1a73e8; box-shadow:0 0 0 3px rgba(26,115,232,.18); }
+  .dot.d { width:12px; height:12px; border-radius:2px 2px 2px 0; transform:rotate(45deg); background:#ea4335; }
+  .row input { border:none; background:transparent; outline:none; width:100%; font-family:inherit; font-size:15px; color:#202124; }
+  .row input::placeholder { color:#5f6368; }
+  .ac { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border-radius:8px;
+    box-shadow:0 2px 6px rgba(60,64,67,.28); z-index:2000; max-height:260px; overflow-y:auto; display:none; }
+  .ac.on { display:block; }
+  .ac-item { display:flex; align-items:center; gap:12px; padding:11px 14px; cursor:pointer; }
+  .ac-item:hover { background:#f1f3f4; }
+  .ac-item .pin { color:#5f6368; font-size:16px; width:18px; text-align:center; }
+  .ac-item .nm { font-size:14px; color:#202124; flex:1; }
+  .ac-item .ab { font-size:12px; color:#5f6368; }
+  .go { margin-top:2px; background:#1a73e8; color:#fff; border:none; border-radius:8px; height:44px;
+    font-family:inherit; font-size:15px; font-weight:500; cursor:pointer; transition:background .12s; }
+  .go:hover { background:#1765cc; } .go:disabled { background:#c6c9cc; cursor:default; }
+  .err { color:#d93025; font-size:13px; } .err:empty { display:none; }
+
+  .pill { position:absolute; left:50%; bottom:26px; transform:translateX(-50%); background:#fff; border-radius:24px;
+    padding:9px 12px 9px 16px; z-index:1000; box-shadow:0 1px 3px rgba(60,64,67,.3), 0 4px 12px rgba(60,64,67,.18);
+    display:none; align-items:center; gap:12px; white-space:nowrap; }
+  .pill.on { display:flex; }
+  .pill .walk { font-size:19px; } .pill .t { font-size:20px; font-weight:500; color:#188038; }
+  .pill .d { font-size:14px; color:#5f6368; }
+  .pill .clr { border:none; background:#f1f3f4; color:#5f6368; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:16px; }
+  .pill .clr:hover { background:#e4e6e9; }
+
+  .fab { position:absolute; right:12px; top:12px; z-index:1000; display:flex; gap:8px; align-items:center; }
+  .toggle { background:#fff; border:none; border-radius:8px; height:40px; padding:0 14px; cursor:pointer;
+    box-shadow:0 1px 3px rgba(60,64,67,.3); font-family:inherit; font-size:14px; font-weight:500; color:#3c4043;
+    display:flex; align-items:center; gap:7px; }
+  .toggle.active { background:#CEB888; color:#1a1a1a; }
+  .tools { position:absolute; right:12px; top:60px; z-index:1000; width:220px; background:#fff; border-radius:8px;
+    box-shadow:0 1px 3px rgba(60,64,67,.3); padding:10px; display:none; flex-direction:column; gap:8px; }
+  .tools.on { display:flex; }
+  .tools .lbl { font-size:11px; font-weight:700; letter-spacing:.6px; color:#5f6368; text-transform:uppercase; }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; border:1px solid #dadce0; background:#fff; border-radius:6px; height:34px; cursor:pointer;
+    font-family:inherit; font-size:13px; color:#3c4043; }
+  .seg button.sel { background:#e8f0fe; border-color:#1a73e8; color:#1a73e8; font-weight:500; }
+  .tools .mini { display:flex; gap:6px; }
+  .tools .mini button { flex:1; border:1px solid #dadce0; background:#fff; border-radius:6px; height:32px; cursor:pointer;
+    font-family:inherit; font-size:12px; color:#3c4043; }
+  .tools .mini button:hover { background:#f1f3f4; }
+  .tools .stat { font-size:12px; color:#5f6368; line-height:1.5; }
+  .hint { position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:1000;
+    background:rgba(32,33,36,.9); color:#fff; font-size:13px; padding:7px 14px; border-radius:20px; display:none; }
+  .hint.on { display:block; }
+  .note { position:absolute; left:50%; bottom:80px; transform:translateX(-50%); z-index:900;
+    background:rgba(32,33,36,.82); color:#fff; font-size:12px; padding:6px 12px; border-radius:16px; display:none; }
+  .note.on { display:block; }
+
+  .leaflet-container { font-family:'Roboto',Arial,sans-serif; }
+  .leaflet-tooltip.bldg-label { background:transparent; border:none; box-shadow:none; padding:0;
+    font-size:11px; font-weight:500; color:#5f6368; white-space:nowrap; pointer-events:none;
+    text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 3px #fff; }
+  .leaflet-tooltip.bldg-label::before { display:none; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="card" id="card">
+  <div class="card-head"><div class="brand"><span class="loco">🚂</span>Boiler<b>Nav</b></div></div>
+  <div class="card-body">
+    <div class="field"><div class="row"><span class="dot o"></span><input id="oInput" placeholder="Choose starting point" autocomplete="off"/></div><div class="ac" id="oAc"></div></div>
+    <div class="field"><div class="row"><span class="dot d"></span><input id="dInput" placeholder="Choose destination" autocomplete="off"/></div><div class="ac" id="dAc"></div></div>
+    <div class="err" id="err"></div>
+    <button class="go" id="go">Directions</button>
+  </div>
+</div>
+
+<div class="fab"><button class="toggle" id="editToggle">✏️ Edit map</button></div>
+<div class="tools" id="tools">
+  <div class="lbl">Add walkways / stairs</div>
+  <div class="seg" id="modeSeg">
+    <button data-m="node" class="sel">Add node</button>
+    <button data-m="edge">Link</button>
+    <button data-m="del">Remove</button>
+  </div>
+  <div class="stat" id="editStat"></div>
+  <div class="mini"><button id="expBtn">Export</button><button id="impBtn">Import</button><button id="clrBtn">Clear</button></div>
+  <input type="file" id="impFile" accept="application/json" style="display:none"/>
+  <button id="suggestBtn" class="go" style="height:38px;font-size:14px;margin-top:2px">Suggest edit for review</button>
+  <div class="stat">New nodes auto-connect to the nearest path within 30&nbsp;m. “Suggest” sends your additions to the admin queue (needs the hosted server).</div>
+</div>
+
+<div class="hint" id="hint"></div>
+<div class="note" id="note"></div>
+
+<div class="pill" id="pill">
+  <span class="walk">🚶</span><span class="t" id="pillT"></span><span class="d" id="pillD"></span>
+  <button class="clr" id="pillClr">✕</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ===== base walkway graph (OSM pedestrian network, simplified) =====
+   nodes: { id:[lat,lon] }
+   edges: [ [a,b,len]  |  [a,b,len,[[lat,lon],...]] ]   len in metres    */
+let WALK = {nodes:{},edges:[]};
+
+const WALK_SPEED = 1.4;   // m/s (~5 km/h)
+
+// working graph = base + user edits
+let GRAPH = { nodes:Object.assign({},WALK.nodes), edges:WALK.edges.slice() };
+let USER = { nodes:{}, edges:[], deletions:[] };   // additions + proposed deletions
+
+/* ---- adjacency (rebuilt when graph changes) ---- */
+let ADJ=null;
+function buildAdj(){
+  ADJ={};
+  for(const id in GRAPH.nodes) ADJ[id]=[];
+  for(const e of GRAPH.edges){
+    const a=e[0], b=e[1], w=e[2];
+    if(GRAPH.nodes[a]&&GRAPH.nodes[b]){ ADJ[a].push([b,w,e]); ADJ[b].push([a,w,e]); }
+  }
+}
+buildAdj();
+
+/* ---- geo ---- */
+function hav(a,b){
+  const R=6371000, r=x=>x*Math.PI/180;
+  const dLat=r(b[0]-a[0]), dLon=r(b[1]-a[1]);
+  const s=Math.sin(dLat/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function nearestNode(lat,lon){
+  let best=null,bd=Infinity;
+  for(const id in GRAPH.nodes){
+    const p=GRAPH.nodes[id];
+    const d=(p[0]-lat)*(p[0]-lat)+(p[1]-lon)*(p[1]-lon);
+    if(d<bd){bd=d;best=id;}
+  }
+  return best;
+}
+
+/* ---- binary-heap Dijkstra ---- */
+class Heap{ constructor(){this.a=[];}
+  push(x){const a=this.a;a.push(x);let i=a.length-1;
+    while(i>0){const p=(i-1)>>1; if(a[p][0]<=a[i][0])break; [a[p],a[i]]=[a[i],a[p]]; i=p;}}
+  pop(){const a=this.a,top=a[0],last=a.pop(); if(a.length){a[0]=last;let i=0;
+    for(;;){let l=2*i+1,r=l+1,s=i; if(l<a.length&&a[l][0]<a[s][0])s=l; if(r<a.length&&a[r][0]<a[s][0])s=r;
+      if(s===i)break; [a[s],a[i]]=[a[i],a[s]]; i=s;}} return top;}
+  get size(){return this.a.length;}
+}
+function dijkstra(src,dst){
+  const dist={}, prev={}, pe={};
+  dist[src]=0; const h=new Heap(); h.push([0,src]);
+  while(h.size){
+    const [d,u]=h.pop();
+    if(d>(dist[u]??Infinity)) continue;
+    if(u===dst) break;
+    for(const [v,w,e] of ADJ[u]){
+      const nd=d+w;
+      if(nd<(dist[v]??Infinity)){ dist[v]=nd; prev[v]=u; pe[v]=e; h.push([nd,v]); }
+    }
+  }
+  if(dist[dst]===undefined) return null;
+  const nodes=[]; const edgeSeq=[]; let cur=dst;
+  while(cur!==undefined){ nodes.unshift(cur); if(cur===src)break; edgeSeq.unshift(pe[cur]); cur=prev[cur]; }
+  return { nodes, edgeSeq, metres:dist[dst] };
+}
+
+/* build the drawn polyline from the edge sequence, honoring stored geometry */
+function pathGeometry(res){
+  const pts=[];
+  for(let i=0;i<res.edgeSeq.length;i++){
+    const e=res.edgeSeq[i], from=res.nodes[i];
+    let g = e.length>3 ? e[3].slice() : [GRAPH.nodes[e[0]], GRAPH.nodes[e[1]]];
+    // orient geometry to travel direction
+    const gStart=g[0];
+    const fp=GRAPH.nodes[from];
+    if(hav(gStart,fp) > hav(g[g.length-1],fp)) g=g.slice().reverse();
+    if(i>0) g=g.slice(1);
+    for(const p of g) pts.push(p);
+  }
+  return pts;
+}
+
+/* ---- map ---- */
+const map=L.map('map',{zoomControl:false,maxZoom:20}).setView([40.4266,-86.9180],15);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  {attribution:'© OpenStreetMap · © CARTO',maxZoom:20,subdomains:'abcd'}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+let routeLine=null,oMarker=null,dMarker=null,origin=null,dest=null;
+
+/* Community-contributed walkways.
+   Approved (merged into walkways.json, node ids s…) → blue dotted, hover shows
+   who added it and when. Your own local, not-yet-approved edits (ids u…) → red. */
+const communityLayer=L.layerGroup().addTo(map);
+const cEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sidOf=id=>{const m=String(id).match(/^s([a-z0-9]+)_/i);return m?m[1]:null;};
+const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});}catch{return '';}};
+function drawContribEdge(e,approved,tip){
+  const geom = e.length>3 ? e[3] : [GRAPH.nodes[e[0]],GRAPH.nodes[e[1]]];
+  if(!geom||!geom[0]||!geom[geom.length-1]) return;
+  const ln=L.polyline(geom,{color:approved?'#1a73e8':'#ea4335',weight:4,opacity:.9,dashArray:'1,7',lineCap:'round',interactive:!editing});
+  if(!editing) ln.bindTooltip(tip,{sticky:true,direction:'top',opacity:1});
+  ln.addTo(communityLayer);
+}
+function renderCommunity(){
+  communityLayer.clearLayers();
+  const meta=(WALK&&WALK.meta)||{};
+  for(const e of WALK.edges){                     // approved
+    const sid=sidOf(e[0])||sidOf(e[1]); if(!sid) continue;
+    const m=meta[sid]||{};
+    const who=m.submitter?`<br>${cEsc(m.submitter)}${m.date?', '+fmtDate(m.date):''}`:'';
+    drawContribEdge(e,true,`<b>Approved</b>${who}`);
+  }
+  for(const e of USER.edges){                      // local, not yet approved
+    drawContribEdge(e,false,'<b>Unapproved</b>');
+  }
+}
+
+/* ---- buildings (labels + search) from OSM ---- */
+let POIS=[
+  {name:"Hillenbrand Hall",lat:40.42689,lon:-86.92671},
+  {name:"Wilmeth Active Learning Center",lat:40.42735,lon:-86.91318},
+  {name:"Stewart Center",lat:40.42491,lon:-86.91276}
+];
+const bldgLabels=L.layerGroup();
+const BBOX=[40.418,-86.930,40.434,-86.906];
+const note=document.getElementById('note');
+function showNote(t){ note.textContent=t; note.classList.add('on'); }
+function hideNote(){ note.classList.remove('on'); }
+
+function centroid(pts){let a=0,cx=0,cy=0;
+  for(let i=0;i<pts.length;i++){const [y1,x1]=pts[i],[y2,x2]=pts[(i+1)%pts.length];
+    const f=x1*y2-x2*y1;a+=f;cx+=(x1+x2)*f;cy+=(y1+y2)*f;}
+  if(Math.abs(a)<1e-12){const m=pts.reduce((s,p)=>[s[0]+p[0],s[1]+p[1]],[0,0]);return [m[0]/pts.length,m[1]/pts.length];}
+  a*=0.5;return [cy/(6*a),cx/(6*a)];}
+
+// Bundled building data goes here (name + lat/lon). When present, no network needed.
+let BUILDINGS_BUNDLED = null;
+
+// CORS-enabled Overpass mirrors (main overpass-api.de blocks file:// origins)
+const OVERPASS=[
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass-api.de/api/interpreter'
+];
+async function fetchOverpass(q){
+  for(const base of OVERPASS){
+    try{
+      const ctrl=new AbortController();
+      const timer=setTimeout(()=>ctrl.abort(),8000);
+      const res=await fetch(base+'?data='+encodeURIComponent(q),{signal:ctrl.signal});
+      clearTimeout(timer);
+      if(!res.ok) continue;
+      const d=await res.json();
+      if(d&&d.elements) return d;
+    }catch(e){ /* timeout or CORS — try next mirror */ }
+  }
+  return null;
+}
+let BUILD=[];
+function setBuildings(list){
+  BUILD=list.filter(b=>b.name&&b.lat!=null&&b.lon!=null).sort((a,b)=>(b.area||0)-(a.area||0));
+  POIS=BUILD.map(b=>({name:b.name,abbr:b.abbr||'',lat:b.lat,lon:b.lon}));
+  declutter();
+}
+/* Google-style label placement: big buildings first, skip anything that
+   would overlap an already-placed label; denser as you zoom in. */
+const MAXLABELS=120;
+function declutter(){
+  bldgLabels.clearLayers();
+  if(map.getZoom()<13) return;
+  const bounds=map.getBounds(), placed=[]; let n=0;
+  for(const b of BUILD){
+    if(n>=MAXLABELS) break;
+    if(!bounds.contains([b.lat,b.lon])) continue;
+    const pt=map.latLngToContainerPoint([b.lat,b.lon]);
+    const w=b.name.length*6.1+8, h=15;
+    const box=[pt.x-w/2, pt.y-h/2, pt.x+w/2, pt.y+h/2];
+    let hit=false;
+    for(const p of placed){ if(!(box[2]<p[0]||box[0]>p[2]||box[3]<p[1]||box[1]>p[3])){hit=true;break;} }
+    if(hit) continue;
+    placed.push(box); n++;
+    const mk=L.marker([b.lat,b.lon],{opacity:0,interactive:false});
+    mk.bindTooltip(b.name,{permanent:true,direction:'center',className:'bldg-label'});
+    mk.addTo(bldgLabels);
+  }
+}
+async function loadBuildings(){
+  if(BUILDINGS_BUNDLED&&BUILDINGS_BUNDLED.length){ setBuildings(BUILDINGS_BUNDLED); return; }
+  showNote('Loading building names…');
+  const q=`[out:json][timeout:25];(way["building"]["name"](${BBOX.join(',')});`+
+          `relation["building"]["name"](${BBOX.join(',')}););out geom;`;
+  const data=await fetchOverpass(q);
+  if(!data){ showNote('Building names couldn’t load. (Bundle them in for a permanent fix.)'); setTimeout(hideNote,4000); return; }
+  const list=[];
+  for(const el of (data.elements||[])){
+    let ring=null;
+    if(el.type==='way'&&el.geometry) ring=el.geometry.map(p=>[p.lat,p.lon]);
+    else if(el.type==='relation'&&el.members){const o=el.members.find(m=>m.role==='outer'&&m.geometry); if(o) ring=o.geometry.map(p=>[p.lat,p.lon]);}
+    if(!ring||ring.length<3) continue;
+    const nm=el.tags&&el.tags.name; if(!nm) continue;
+    const c=centroid(ring);
+    list.push({name:nm,lat:c[0],lon:c[1],area:0});
+  }
+  setBuildings(list); hideNote();
+}
+bldgLabels.addTo(map);
+map.on('moveend',declutter);
+async function fetchJSON(p){const r=await fetch(p);if(!r.ok)throw new Error(p+' '+r.status);return r.json();}
+async function initData(){
+  try{
+    const [w,b]=await Promise.all([fetchJSON('./walkways.json'),fetchJSON('./buildings.json')]);
+    WALK=w; GRAPH={nodes:Object.assign({},WALK.nodes),edges:WALK.edges.slice()}; buildAdj();
+    await loadUser();
+    setBuildings(b);
+    renderCommunity();
+  }catch(e){
+    console.error(e);
+    showNote('Couldn\u2019t load map data \u2014 run a local server (python3 -m http.server) or host on GitHub Pages.');
+  }
+}
+initData();
+
+/* ---- autocomplete ---- */
+function wireAc(inputId,acId,onPick){
+  const input=document.getElementById(inputId),ac=document.getElementById(acId);
+  input.addEventListener('input',()=>{
+    const q=input.value.trim().toLowerCase();ac.innerHTML='';
+    if(!q){ac.classList.remove('on');return;}
+    const hits=POIS.filter(p=>p.name.toLowerCase().includes(q)||(p.abbr&&p.abbr.toLowerCase().includes(q)))
+      .sort((a,b)=>{const ax=a.abbr&&a.abbr.toLowerCase()===q?0:1,bx=b.abbr&&b.abbr.toLowerCase()===q?0:1;return ax-bx;})
+      .slice(0,7);
+    if(!hits.length){ac.classList.remove('on');return;}
+    for(const p of hits){const el=document.createElement('div');el.className='ac-item';
+      el.innerHTML=`<span class="pin">📍</span><span class="nm">${p.name}</span>${p.abbr?`<span class="ab">${p.abbr}</span>`:''}`;
+      el.addEventListener('mousedown',()=>{input.value=p.name;ac.classList.remove('on');onPick(p);});
+      ac.appendChild(el);}
+    ac.classList.add('on');
+  });
+  input.addEventListener('blur',()=>setTimeout(()=>ac.classList.remove('on'),150));
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'){ac.classList.remove('on');if(origin&&dest)route();}});
+}
+wireAc('oInput','oAc',p=>{origin={...p};mark('o',p);});
+wireAc('dInput','dAc',p=>{dest={...p};mark('d',p);});
+function mark(which,p){
+  if(which==='o'){ if(oMarker)map.removeLayer(oMarker);
+    oMarker=L.circleMarker([p.lat,p.lon],{radius:7,fillColor:'#1a73e8',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
+  } else { if(dMarker)map.removeLayer(dMarker); dMarker=L.marker([p.lat,p.lon]).addTo(map); }
+}
+
+/* ---- routing ---- */
+function route(){
+  const err=document.getElementById('err');err.textContent='';
+  if(!origin){err.textContent='Pick a starting point.';return;}
+  if(!dest){err.textContent='Pick a destination.';return;}
+  const s=nearestNode(origin.lat,origin.lon),t=nearestNode(dest.lat,dest.lon);
+  const res=dijkstra(s,t);
+  if(!res){err.textContent='No connected route found.';return;}
+  const geom=pathGeometry(res);
+  const pts=[[origin.lat,origin.lon],...geom,[dest.lat,dest.lon]];
+  const metres=res.metres+hav([origin.lat,origin.lon],GRAPH.nodes[s])+hav([dest.lat,dest.lon],GRAPH.nodes[t]);
+  if(routeLine)map.removeLayer(routeLine);
+  routeLine=L.polyline(pts,{color:'#1a73e8',weight:6,opacity:.9,lineJoin:'round',lineCap:'round'}).addTo(map);
+  map.fitBounds(routeLine.getBounds(),{padding:[80,80]});
+  const mins=Math.max(1,Math.round(metres/WALK_SPEED/60)), miles=metres/1609.34;
+  document.getElementById('pillT').textContent=mins+' min';
+  document.getElementById('pillD').textContent=(miles<0.1?Math.round(metres*3.281)+' ft':miles.toFixed(1)+' mi');
+  document.getElementById('pill').classList.add('on');
+}
+document.getElementById('go').addEventListener('click',route);
+document.getElementById('pillClr').addEventListener('click',()=>{
+  document.getElementById('pill').classList.remove('on');
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+});
+
+/* ===== EDIT MODE — add walkways / stairs on top of the base net ===== */
+let editing=false,editMode='node',linkFrom=null,seq=0,editLayer=null,DEL_INVIEW=[];
+const editToggle=document.getElementById('editToggle'),tools=document.getElementById('tools'),
+      hint=document.getElementById('hint'),editStat=document.getElementById('editStat');
+editToggle.addEventListener('click',()=>{
+  editing=!editing; editToggle.classList.toggle('active',editing); tools.classList.toggle('on',editing);
+  document.getElementById('card').style.display=editing?'none':'block';
+  renderCommunity();
+  if(editing){showHint();renderEdits();} else {clearEdits();hint.classList.remove('on');linkFrom=null;}
+});
+document.querySelectorAll('#modeSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');editMode=b.dataset.m;linkFrom=null;showHint();renderEdits();
+}));
+function showHint(){hint.textContent={node:'Click to drop a node (auto-links to nearby path)',edge:'Click two nodes to link',del:'Zoom in and click a path to remove it (existing paths are marked for deletion review)'}[editMode];hint.classList.add('on');}
+function uid(){return 'u'+(Date.now().toString(36))+(seq++);}
+
+function commit(){ GRAPH.nodes=Object.assign({},WALK.nodes,USER.nodes); GRAPH.edges=WALK.edges.concat(USER.edges); buildAdj(); saveUser(); renderCommunity(); }
+
+function distToSeg(p,a,b){
+  const dx=b.x-a.x, dy=b.y-a.y, l2=dx*dx+dy*dy;
+  if(!l2) return Math.hypot(p.x-a.x,p.y-a.y);
+  let t=((p.x-a.x)*dx+(p.y-a.y)*dy)/l2; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(p.x-(a.x+t*dx), p.y-(a.y+t*dy));
+}
+map.on('click',e=>{
+  if(!editing)return;
+  if(editMode==='del'){                       // click near a path → mark/unmark it
+    const cp=e.containerPoint; let best=null,bd=Infinity;
+    for(const [ed] of DEL_INVIEW){
+      const geom=ed.length>3?ed[3]:[WALK.nodes[ed[0]],WALK.nodes[ed[1]]];
+      for(let i=0;i+1<geom.length;i++){
+        const d=distToSeg(cp,map.latLngToContainerPoint(geom[i]),map.latLngToContainerPoint(geom[i+1]));
+        if(d<bd){bd=d;best=ed;}
+      }
+    }
+    if(best && bd<=22){
+      const i=delIndex(best[0],best[1]);
+      if(i>=0) USER.deletions.splice(i,1);
+      else USER.deletions.push({a:best[0],b:best[1],geom:best.length>3?best[3]:[WALK.nodes[best[0]],WALK.nodes[best[1]]]});
+      saveUser(); renderEdits();
+    }
+    return;
+  }
+  if(editMode!=='node')return;
+  const id=uid(), lat=+e.latlng.lat.toFixed(6), lon=+e.latlng.lng.toFixed(6);
+  USER.nodes[id]=[lat,lon];
+  // auto-connect to nearest base/user node within 30 m
+  let best=null,bd=Infinity;
+  for(const nid in GRAPH.nodes){const p=GRAPH.nodes[nid];const d=hav([lat,lon],p);if(d<bd){bd=d;best=nid;}}
+  if(best&&bd<=30) USER.edges.push([id,best,Math.round(bd*10)/10]);
+  commit();renderEdits();
+});
+function clearEdits(){if(editLayer){map.removeLayer(editLayer);editLayer=null;}}
+const edgeKey=(a,b)=>String(a)<String(b)?a+'|'+b:b+'|'+a;
+const delIndex=(a,b)=>{const k=edgeKey(a,b);return USER.deletions.findIndex(d=>edgeKey(d.a,d.b)===k);};
+function renderEdits(){
+  clearEdits(); if(!editing)return; editLayer=L.layerGroup().addTo(map);
+
+  // Remove mode: draw existing paths as guides; a click snaps to the nearest one
+  if(editMode==='del'){
+    const bounds=map.getBounds(); DEL_INVIEW=[];
+    for(const e of WALK.edges){
+      const A=WALK.nodes[e[0]], B=WALK.nodes[e[1]]; if(!A||!B) continue;
+      if(bounds.contains(A)||bounds.contains(B)){ DEL_INVIEW.push([e,A,B]); if(DEL_INVIEW.length>4000) break; }
+    }
+    if(DEL_INVIEW.length>1500){
+      hint.textContent='Too many paths here — zoom in, then tap near a path to remove it';
+      DEL_INVIEW=[];                                  // don't snap to paths that aren't drawn
+    }else{
+      hint.textContent=`Tap near a path to mark it for removal · ${USER.deletions.length} marked`;
+      for(const [e,A,B] of DEL_INVIEW){
+        const geom=e.length>3?e[3]:[A,B];
+        const marked=delIndex(e[0],e[1])>=0;
+        L.polyline(geom,{color:marked?'#ea4335':'#5f6368',weight:marked?6:3,
+          opacity:marked?.95:.6,dashArray:marked?'4,5':null,interactive:false}).addTo(editLayer);
+      }
+    }
+    hint.classList.add('on');
+  }
+
+  // your own additions (gold), clickable to remove locally
+  USER.edges.forEach((ed,i)=>{
+    const a=GRAPH.nodes[ed[0]],b=GRAPH.nodes[ed[1]]; if(!a||!b)return;
+    const ln=L.polyline([a,b],{color:'#CEB888',weight:5,opacity:.95}).addTo(editLayer);
+    ln.on('click',ev=>{L.DomEvent.stop(ev); if(editMode==='del'){USER.edges.splice(i,1);commit();renderEdits();}});
+  });
+  for(const id in USER.nodes){
+    const sel=id===linkFrom;
+    const m=L.circleMarker(USER.nodes[id],{radius:6,fillColor:sel?'#ea4335':'#1a73e8',color:'#fff',weight:2,fillOpacity:1}).addTo(editLayer);
+    m.on('click',ev=>{L.DomEvent.stop(ev);
+      if(editMode==='del'){delete USER.nodes[id];USER.edges=USER.edges.filter(e=>e[0]!==id&&e[1]!==id);commit();renderEdits();}
+      else if(editMode==='edge'){
+        if(!linkFrom){linkFrom=id;renderEdits();}
+        else if(linkFrom!==id){
+          const d=hav(USER.nodes[linkFrom]||GRAPH.nodes[linkFrom],USER.nodes[id]);
+          if(!USER.edges.some(e=>(e[0]===linkFrom&&e[1]===id)||(e[1]===linkFrom&&e[0]===id))) USER.edges.push([linkFrom,id,Math.round(d*10)/10]);
+          linkFrom=null;commit();renderEdits();
+        }}});
+  }
+  editStat.textContent=`${Object.keys(USER.nodes).length} added · ${USER.edges.length} links · ${USER.deletions.length} to remove`;
+}
+map.on('moveend',()=>{ if(editing && editMode==='del') renderEdits(); });
+document.getElementById('expBtn').addEventListener('click',()=>{
+  const delKeys=new Set(USER.deletions.map(d=>edgeKey(d.a,d.b)));
+  const merged={nodes:Object.assign({},WALK.nodes,USER.nodes),
+    edges:WALK.edges.concat(USER.edges).filter(e=>!delKeys.has(edgeKey(e[0],e[1])))};
+  if(WALK.meta) merged.meta=WALK.meta;
+  const blob=new Blob([JSON.stringify(merged)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='walkways.json';a.click();
+});
+document.getElementById('suggestBtn').addEventListener('click',async()=>{
+  const hasAdds=Object.keys(USER.nodes).length||USER.edges.length;
+  if(!hasAdds && !USER.deletions.length){ alert('Add or mark a path for removal first.'); return; }
+  const submitter=prompt('Your name (optional):','')||'anonymous';
+  const note=prompt('What does this change do? (optional):','')||'';
+  try{
+    const res=await fetch('./api/suggest',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({submitter,note,edit:{nodes:USER.nodes,edges:USER.edges},deletions:USER.deletions})});
+    if(!res.ok) throw new Error(await res.text());
+    alert('Sent for review — thanks! The admin will approve or reject it.');
+    USER={nodes:{},edges:[],deletions:[]}; commit(); renderEdits();
+  }catch(e){
+    alert('Couldn\u2019t reach the review server.\nThis feature needs the hosted server (node server.js).\nOn a static site, use Export and open a pull request instead.');
+  }
+});
+document.getElementById('impBtn').addEventListener('click',()=>document.getElementById('impFile').click());
+document.getElementById('clrBtn').addEventListener('click',()=>{
+  if(!Object.keys(USER.nodes).length && !USER.edges.length && !USER.deletions.length) return;
+  if(confirm('Clear all your unsaved edits (added nodes/links and marked removals)?')){
+    USER={nodes:{},edges:[],deletions:[]}; commit(); renderEdits();
+  }
+});
+document.getElementById('impFile').addEventListener('change',ev=>{
+  const f=ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const g=JSON.parse(r.result);if(g.nodes&&g.edges){WALK=g;USER={nodes:{},edges:[],deletions:[]};commit();renderEdits();}}catch(e){alert('Bad JSON');}};
+  r.readAsText(f);
+});
+async function saveUser(){try{if(window.storage)await window.storage.set('boilernav:user',JSON.stringify(USER),false);}catch(e){}}
+async function loadUser(){try{if(window.storage){const r=await window.storage.get('boilernav:user',false);
+  if(r&&r.value){const u=JSON.parse(r.value);if(u.nodes&&u.edges){USER={nodes:u.nodes,edges:u.edges,deletions:u.deletions||[]};commit();}}}}catch(e){}}
+loadUser();
+</script>
+</body>
+</html>
